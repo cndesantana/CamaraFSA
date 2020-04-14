@@ -1,0 +1,118 @@
+---
+title: "CamaraFSA Dash"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(lubridate)
+
+data <- read.csv("data/expenses-11.04.2020.csv")
+rexp <- "^(\\w+)\\s?(.*)$"
+
+
+```
+
+
+Análise de gastos da Câmara
+===================================== 
+
+
+Inputs {.sidebar data-width=200}
+-----------------------------------------------------------------------
+
+```{r}
+
+checkboxGroupInput ("phase","Escolha phase", 
+                    choices = c("empenho","liquidacao","pagamento"),
+                    selected = c("pagamento") )
+
+checkboxGroupInput ("type_of_process","Escolha tipo de processo", 
+                    choices = c("CONCORRENCIA", "CONVENIO", "CONVITE", "DISPENSA", "INEXIGIBILIDADE", "ISENTO", "PREGAO", "TOMADA DE PRECO"),
+                    selected = c("DISPENSA") )
+
+sliderInput("num_Max", "Para que ano deseja analisar os dados?", value=2020, min=2010, max = 2020) 
+
+
+```
+
+
+Column 
+-----------------------------------------------------------------------
+
+### Empresas ou Pessoas Físicas
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+
+renderPlot({
+
+
+  df_filtro<- data %>% 
+    filter(phase == input$phase, 
+           year(ymd(date)) == input$num_Max,
+           type_of_process == input$type_of_process) 
+  
+  df_company <- df_filtro %>% 
+    group_by(company_or_person) %>% 
+    summarise(total = sum(value)) %>% 
+    filter(total > 1000) %>%
+    arrange(total) %>% tail(20)
+   
+   graph_tox_cultura<<-df_company%>%
+   ggplot(aes(x=reorder(company_or_person,total), y = total)) +
+   geom_bar(stat="identity") +
+   geom_text(aes(x=reorder(company_or_person,total), y = total, label=paste0(round(total/1000),"K"), hjust=0))+
+   labs(x = "Empresa ou Pessoa Física", y = "Total em Milhares de Reais", title = paste(input$phase,input$type_of_process,sep="-"), subtitle = paste("Ano",input$num_Max))+
+   theme_bw()+
+   coord_flip()
+   
+   graph_tox_cultura
+
+})
+```
+
+
+Tabela de dados
+===================================== 
+
+### Tabela
+
+```{r}
+library(DT)
+
+
+renderDataTable ({
+  df_filtro<- data %>% 
+    filter(phase == input$phase, 
+           year(ymd(date)) == input$num_Max,
+           type_of_process == input$type_of_process) 
+  
+  df_filtro %>%
+    distinct(date,company_or_person,document,group,legal_status,phase,subgroup,type_of_process,value)%>%
+    DT::datatable(                  fillContainer = TRUE,
+                   selection = "none",
+                   extensions = "Buttons", 
+                   rownames = FALSE, 
+                   colnames=c("date","company_or_person","document","group","legal_status","phase","subgroup","type_of_process","value"),
+                   options = list(
+                    pageLength = NROW(df_filtro),
+                    dom = 'Bfrtip',
+                    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+                   ))
+})
+
+
+
+```
+
+
